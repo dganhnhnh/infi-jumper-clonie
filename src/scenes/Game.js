@@ -107,10 +107,12 @@ export default class Game extends Phaser.Scene{
 
         this.player.setVelocityX(0)
         if(this.cursors.left.isDown && !touchingDown){
-            this.player.setVelocityX(-150)
+            this.player.setVelocityX(-300)
+            this.cursors.left.isDown = false
         }
         else if(this.cursors.right.isDown && !touchingDown){
-            this.player.setVelocityX(150)
+            this.player.setVelocityX(300)
+            this.cursors.right.isDown=false
         }
         else{this.player.setVelocityX(0)}
 
