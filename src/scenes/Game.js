@@ -2,6 +2,10 @@ import Phaser from '../lib/phaser.js'
 
 import Carrot from '../game/Carrot.js'
 
+import Predator from '../game/Predator.js'
+
+import Shit from '../game/Shit.js'
+
 export default class Game extends Phaser.Scene{
 
     carrotsCollected =0
@@ -11,6 +15,8 @@ export default class Game extends Phaser.Scene{
 
     /**@type {Phaser.Physics.Arcade.StaticGroup} */
     platforms
+    /**@type {Phaser.Physics.Arcade.StaticGroup} */
+    portals
 
     /**@type {Phaser.Physics.Arcade.Sprite} */
     player
@@ -20,6 +26,12 @@ export default class Game extends Phaser.Scene{
 
     /**@type {Phaser.Physics.Arcade.Group} */
     carrots
+
+    /**@type {Phaser.Physics.Arcade.Group*/
+    predators
+
+    /**@type {Phaser.Physics.Arcade.Group*/
+    shits
 
     constructor(){
         super('game')       //defining a unique key
@@ -36,6 +48,9 @@ export default class Game extends Phaser.Scene{
         this.load.image('bunny_stand','assets/bunny_stand.png')
         this.load.image('bunny_jump', 'assets/bunny_jump.png')
         this.load.image('carrot','assets/carrot.png')
+        this.load.image('pred', 'assets/predator.png')
+        this.load.image('shit', 'assets/shit.png')
+        this.load.image('portal','assets/leap_hole.png')
 
         this.load.audio('jump', 'assets/sfx/jump.mp3')
         this.load.audio('nom-nom', 'assets/sfx/nomnom.mp3')
@@ -51,6 +66,8 @@ export default class Game extends Phaser.Scene{
         //     .setScale(0.5)
 
         this.platforms = this.physics.add.staticGroup()
+        this.portals = this.physics.add.staticGroup().setDepth(1)
+        
 
         for(let i=0;i<5;++i){
             const x=Phaser.Math.Between(80,400)
@@ -65,10 +82,25 @@ export default class Game extends Phaser.Scene{
             body.updateFromGameObject()
         }
 
+        //add holes
+        for(let i=0;i<3;++i){
+            const x=Phaser.Math.Between(80,400)
+            const y=300*i
+
+            /** @type {Phaser.Physics.Arcade.Sprite} */
+            const portal = this.portals.create(x,y,'portal')
+            // platform.scale =0.5
+
+            /** @type {Phaser.Physics.Arcade.StaticBody}*/
+            const body =portal.body
+            body.updateFromGameObject()
+        }
+
         this.player = this.physics.add.sprite(240,180,'bunny_stand')
             .setScale(0.5)
 
         this.physics.add.collider(this.platforms,this.player)
+        // this.physics.add.collider(this.portals,this.player)
 
         this.player.body.checkCollision.up =false
         this.player.body.checkCollision.left =false
@@ -84,9 +116,15 @@ export default class Game extends Phaser.Scene{
         this.carrots = this.physics.add.group({
             classType: Carrot
         })
+        this.predators = this.physics.add.group({
+            classType: Predator
+        })
+        this.shits = this.physics.add.group({
+            classType: Shit
+        })
+
 
         this.physics.add.collider(this.platforms, this.carrots)
-
         this.physics.add.overlap(
             this.player,
             this.carrots,
@@ -94,6 +132,24 @@ export default class Game extends Phaser.Scene{
             undefined,
             this            //scope
         )
+
+        this.physics.add.collider(this.platforms, this.predators)
+        this.physics.add.overlap(
+            this.player,
+            this.predators,
+            this.handleBeingEaten,
+            undefined,
+            this            //scope
+        )
+
+        this.physics.add.overlap(
+            this.player,
+            this.shits,
+            this.handleBeingPoopedOn,
+            undefined,
+            this            //scope
+        )
+        //how to make it: pooped on 3 times,dead
 
         
         const style = {color:'pink', fontsize:40}
@@ -103,7 +159,9 @@ export default class Game extends Phaser.Scene{
         
     }
     update(){
+
         const touchingDown =this.player.body.touching.down
+        // this.handleMovement(this.player, this.cursors)
 
         this.player.setVelocityX(0)
         if(this.cursors.left.isDown && !touchingDown){
@@ -116,6 +174,7 @@ export default class Game extends Phaser.Scene{
         }
         else{this.player.setVelocityX(0)}
 
+
         if(this.cameras.main.scrollY >= Math.pow(10,9)){
             this.cameras.main.scrollY=0
         }
@@ -123,6 +182,7 @@ export default class Game extends Phaser.Scene{
         this.platforms.children.iterate(child=>{
             /**@type {Phaser.Physics.Arcade.Sprite} */
             const platform =child
+            const platforms = this.platforms.getChildren()
 
             const scrollY = this.cameras.main.scrollY
 
@@ -132,9 +192,40 @@ export default class Game extends Phaser.Scene{
                 platform.body.updateFromGameObject()
 
                 this.addCarrotsAbove(platform)
+
+                if(this.carrotsCollected>1 && this.carrotsCollected%5 === 0){
+                    this.addPredatorsAbove(platform)
+                }
+
+                //still not a good algo
+
+                // for(let i=0;i<1000;i++){
+                //     if (i%40===0){
+                //         this.addPredatorsAbove(platforms[Phaser.Math.Between(0,4)])
+                //     }
+                // }
+
+                // why this doesn't work??
+                if(this.carrotsCollected>=10){this.addShitsFromSky()}
             }
+            
         })
 
+        this.portals.children.iterate(child=>{
+            /**@type {Phaser.Physics.Arcade.Sprite} */
+            const portal =child
+            const portals = this.portals.getChildren()
+
+            const scrollY = this.cameras.main.scrollY
+
+            if(portal.y >=scrollY+700){
+                portal.y = scrollY -Phaser.Math.Between(50,100)
+                portal.x=Phaser.Math.Between(50,400)
+                portal.body.updateFromGameObject()
+            }
+            
+        })
+        
 
         //improvise to delete skipped-over carrots
 
@@ -150,11 +241,11 @@ export default class Game extends Phaser.Scene{
             }
         })
 
-
+        
         if(touchingDown){
-            this.player.setVelocity(-500)
+            this.player.setVelocity(-400)
             this.player.setTexture('bunny_jump')
-            this.sound.play('jump')
+            
         }
         const veloY = this.player.body.velocity.y
         if(veloY >0 && this.player.texture.key !== 'bunny_stand'){
@@ -170,6 +261,19 @@ export default class Game extends Phaser.Scene{
             this.scene.start('game-over')
             
         }
+
+        const upperPortal = this.findUpperPortal()
+        // if()
+        
+        this.physics.add.overlap(
+            this.player,
+            this.portals,
+            this.teleportLol,
+            undefined,
+            this            
+        )                    //collide with portal, call a function
+        
+
         
     }
     /**
@@ -186,6 +290,21 @@ export default class Game extends Phaser.Scene{
             sprite.x = -halfWidth
         }
     }
+
+    
+    addShitsFromSky(){
+        /**@type {Phaser.Physics.Arcade.Sprite} */
+        const shit = this.shits.get(Phaser.Math.Between(10,470),this.cameras.main.scrollY-320,'shit')
+        shit.setActive(true)                //if this.scrollY, outcome is carrot!!
+        shit.setVisible(true)
+
+        this.add.existing(shit)
+
+        this.physics.world.enable(shit)
+        return shit
+        
+    }
+
     
     /**
      * @param {Phaser.GameObjects.Sprite} sprite 
@@ -211,23 +330,45 @@ export default class Game extends Phaser.Scene{
     }
 
     /**
+     * @param {Phaser.GameObjects.Sprite} sprite 
+     */
+    addPredatorsAbove(sprite){
+        const y=sprite.y - sprite.displayHeight
+
+        /**@type {Phaser.Physics.Arcade.Sprite} */
+        const predator = this.predators.get((sprite.x - (Phaser.Math.Between(-50,50))), y,'pred')
+
+        //set active and visible
+        predator.setActive(true)
+        predator.setVisible(true)
+        
+        this.add.existing(predator)
+
+        predator.body.setSize(predator.width,predator.height)
+
+        //enable body in physics world
+        this.physics.world.enable(predator)
+
+        return predator
+    }
+
+
+    /**
      * @param {Phaser.Physics.Arcade.Sprite} player
      * @param {Phaser.Types.Input.Keyboard.CursorKeys} cursors
      */
     handleMovement(player,cursors){
+        const touchingDown = player.body.touching.down
 
-        const touchingDown =this.player.body.touching.down
-        //dont miss this
-        
-        this.player.setVelocityX(0)
-        if(this.cursors.left.isDown && !touchingDown){
-            this.player.setVelocityX(-150)
+        player.setVelocityX(0)
+        if(cursors.left.isDown && !touchingDown){
+            player.setVelocityX(-400)
+            cursors.left.isDown = false
         }
-        else if(this.cursors.right.isDown && !touchingDown){
-            this.player.setVelocityX(150)
-        } 
-        
-        
+        else if(cursors.right.isDown && !touchingDown){
+            player.setVelocityX(400)
+            cursors.right.isDown=false
+        }
     }
 
     /**
@@ -244,7 +385,22 @@ export default class Game extends Phaser.Scene{
         const value= `Carrots: ${this.carrotsCollected}`
         this.carrotsCollectedText.text = value
 
-        this.sound.play('nom-nom')
+        
+    }
+    /**
+     * @param {Phaser.Physics.Arcade.Sprite} player
+     * @param {Predator} predator
+     */
+    handleBeingEaten(player, predator){
+        this.scene.start('game-over')
+        
+    }
+    /**
+     * @param {Phaser.Physics.Arcade.Sprite} player
+     * @param {Shit} shit
+     */
+     handleBeingPoopedOn(player, shit){
+        this.scene.start('game-over')
     }
 
     findBottommostPlatform(){
@@ -260,4 +416,24 @@ export default class Game extends Phaser.Scene{
 
         return bottomPlatform
     }
+    findUpperPortal(){
+        const portals = this.portals.getChildren()
+        let upperPortal = portals[0]
+
+        for(let i=1; i<portals.length; ++i){
+            const portal = portals[i]
+
+            if(portal.y > upperPortal.y){continue}
+            upperPortal = portal
+        }
+
+        return upperPortal
+    }
+    /**@param {Phaser.Physics.Arcade.Sprite} player */
+    teleportLol(player){
+        const upperPortal = this.findUpperPortal()
+        player.x = upperPortal.x
+        player.y = upperPortal.y
+    }
+
 }

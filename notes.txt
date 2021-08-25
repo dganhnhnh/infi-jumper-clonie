@@ -1,0 +1,4 @@
+1. pooped on 3 times, dead
+2. a byrd that steals carrots. stolen 3 times, dead
+
+3.i only need to find upperPortal once, but the program does it forever
